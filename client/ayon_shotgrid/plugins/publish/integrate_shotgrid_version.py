@@ -88,7 +88,7 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
 
                 elif f".{representation['ext']}" in IMAGE_EXTENSIONS:
                     found_reviewable = True
-                    data_to_update |= {
+                    data_to_update.update({
                         "sg_path_to_movie": local_path,
                         "sg_path_to_frames": local_path,
                     }
@@ -99,7 +99,7 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
         if not found_reviewable and thumbnail_path is not None:
             # create a thumbnail data to update
             found_reviewable = True
-            data_to_update |= {
+            data_to_update.update({
                 "sg_path_to_movie": thumbnail_path,
                 "sg_path_to_frames": thumbnail_path,
             }
