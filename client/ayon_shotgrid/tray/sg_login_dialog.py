@@ -113,9 +113,11 @@ class SgLoginDialog(QtWidgets.QDialog):
         """Check if the provided username can login via the API."""
         sg_username = self.sg_username_input.text()
         sg_password = self.sg_password_input.text()
+        proxy = os.environ.get("HTTPS_PROXY", "").replace("https://", "")
 
         kwargs = {
             "shotgrid_url": self.addon.get_sg_url(),
+            "proxy": proxy
         }
 
         if self.login_type == "tray_pass":
