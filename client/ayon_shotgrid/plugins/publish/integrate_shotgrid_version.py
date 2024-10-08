@@ -1,6 +1,6 @@
 from pprint import pformat
 import re
-
+import shotgun_api3
 import pyblish.api
 
 from ayon_core.pipeline.publish import get_publish_repre_path
@@ -43,46 +43,66 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
         # find thumbnail path
         thumbnail_path = instance.data.get("thumbnailPath")
 
+        # set pathtoframes exclusion filters
+        frames_path_filters = ["thumb", "review", "_png"]
+
         found_reviewable = False
+        found_frames = False
+
         for representation in instance.data.get("representations", []):
             self.log.debug(pformat(representation))
 
-            if "shotgridreview" not in representation.get("tags", []):
+            # Skip unwanted representations
+            if any(filter_name for filter_name in frames_path_filters if filter_name in f".{representation['name']}"):
                 continue
 
             local_path = get_publish_repre_path(
                 instance, representation, False
             )
 
-            if f".{representation['ext']}" in VIDEO_EXTENSIONS:
-                found_reviewable = True
-                data_to_update["sg_path_to_movie"] = local_path
-                if (
-                    "slate" in instance.data["families"]
-                    and "slate-frame" in representation["tags"]
-                ):
-                    data_to_update["sg_movie_has_slate"] = True
+            # Skip temp locations
+            if local_path.startswith("/tmp"):
+                continue
 
-            elif f".{representation['ext']}" in IMAGE_EXTENSIONS:
-                found_reviewable = True
-                # Replace the frame number with '%04d'
-                path_to_frame = re.sub(r"\.\d+\.", ".%04d.", local_path)
+            # Replace the frame number with '####'
+            local_path = re.sub(r"\.\d+\.", ".####.", local_path)
 
-                data_to_update.update({
-                    "sg_path_to_movie": path_to_frame,
-                    "sg_path_to_frames": path_to_frame,
-                })
+            if "shotgridreview" not in representation.get("tags", []) and not found_frames:
+                if f".{representation['ext']}" in IMAGE_EXTENSIONS:
+                    data_to_update["sg_path_to_frames"] = local_path
+                    self.log.debug(f"setting path_to_frames to {local_path}")
 
-                if "slate" in instance.data["families"]:
-                    data_to_update["sg_frames_have_slate"] = True
+                    # Stop updating the path if the representation is tagged
+                    if "shotgridpathtoframes" in representation.get("tags", []):
+                        found_frames = True
+
+            else:
+                if f".{representation['ext']}" in VIDEO_EXTENSIONS:
+                    found_reviewable = True
+                    data_to_update["sg_path_to_movie"] = local_path
+                    if (
+                        "slate" in instance.data["families"]
+                        and "slate-frame" in representation["tags"]
+                    ):
+                        data_to_update["sg_movie_has_slate"] = True
+
+                elif f".{representation['ext']}" in IMAGE_EXTENSIONS:
+                    found_reviewable = True
+                    data_to_update |= {
+                        "sg_path_to_movie": local_path,
+                        "sg_path_to_frames": local_path,
+                    }
+
+                    if "slate" in instance.data["families"]:
+                        data_to_update["sg_frames_have_slate"] = True
 
         if not found_reviewable and thumbnail_path is not None:
             # create a thumbnail data to update
             found_reviewable = True
-            data_to_update.update({
+            data_to_update |= {
                 "sg_path_to_movie": thumbnail_path,
                 "sg_path_to_frames": thumbnail_path,
-            })
+            }
 
         # If there's no data to set/update, skip creation of SG version
         if not found_reviewable:
@@ -131,6 +151,7 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
                     path_to_movie, sg_version.get("id")
                 )
             )
+            shotgun_api3.shotgun.NO_SSL_VALIDATION = True
             sg_session.upload(
                 "Version",
                 sg_version.get("id"),
@@ -156,6 +177,16 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
             frame_end = int(frame_end)
             handle_end = int(handle_end)
             data_to_update["sg_last_frame"] = frame_end + handle_end
+
+        ################################### FA Custom stuff start ###################################
+        if frame_start is not None and handle_start is not None:
+            if frame_end is not None and handle_end is not None:
+                frame_in = int(frame_start - handle_start)
+                frame_out = int(frame_end + handle_end)
+                data_to_update["frame_count"] = frame_out - frame_in + 1
+                data_to_update["frame_range"] = '-'.join([str(frame_in), str(frame_out)])
+        ################################### FA Custom stuff end #####################################
+
 
         # Add a few extra fields from AY to SG version
         for ay_field, sg_field in self.fields_to_add.items():
