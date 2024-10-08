@@ -115,7 +115,6 @@ def create_sg_session(
         kwargs["http_proxy"] = proxy
 
     session = shotgun_api3.Shotgun(**kwargs)
-
     session.preferences_read()
 
     return session
