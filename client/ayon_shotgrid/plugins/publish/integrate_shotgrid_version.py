@@ -91,7 +91,7 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
                     data_to_update.update({
                         "sg_path_to_movie": local_path,
                         "sg_path_to_frames": local_path,
-                    }
+                    })
 
                     if "slate" in instance.data["families"]:
                         data_to_update["sg_frames_have_slate"] = True
@@ -102,7 +102,7 @@ class IntegrateShotgridVersion(pyblish.api.InstancePlugin):
             data_to_update.update({
                 "sg_path_to_movie": thumbnail_path,
                 "sg_path_to_frames": thumbnail_path,
-            }
+            })
 
         # If there's no data to set/update, skip creation of SG version
         if not found_reviewable:
